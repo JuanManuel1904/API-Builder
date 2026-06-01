@@ -1,0 +1,62 @@
+// Visual API Builder — Prisma Schema
+// This schema stores the platform's own data.
+// The generated APIs from metadata are separate.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  DEVELOPER
+  VIEWER
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  name         String
+  passwordHash String    @map("password_hash")
+  role         UserRole  @default(DEVELOPER)
+  projects     Project[]
+  refreshTokens RefreshToken[]
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique
+  userId    String   @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Project {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  ownerId     String   @map("owner_id") @db.Uuid
+  // The entire project graph as JSONB — entities, relations, flows, endpoints
+  metadata    Json     @default("{\"entities\":[],\"relations\":[],\"flows\":[],\"endpoints\":[],\"validations\":[],\"auth\":{\"strategy\":\"jwt\"}}")
+  version     Int      @default(1)
+  isPublic    Boolean  @default(false) @map("is_public")
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([ownerId])
+  @@index([isPublic])
+  @@map("projects")
+}

@@ -1,0 +1,205 @@
+import type {
+  EntityDefinition,
+  EntityField,
+  RelationDefinition,
+  FieldType,
+  ProjectMetadata,
+} from '@vab/types';
+
+const PRISMA_TYPE_MAP: Record<FieldType, string> = {
+  string: 'String',
+  number: 'Float',
+  boolean: 'Boolean',
+  date: 'DateTime',
+  uuid: 'String',
+  enum: 'String',
+  json: 'Json',
+  array: 'Json',
+};
+
+function generateFieldLine(field: EntityField): string {
+  const { name, type, constraints, isId, isCreatedAt, isUpdatedAt } = field;
+
+  if (isId) {
+    return `  ${name}  String  @id @default(uuid())`;
+  }
+
+  let prismaType = PRISMA_TYPE_MAP[type];
+  const attributes: string[] = [];
+
+  if (constraints.nullable) {
+    prismaType = `${prismaType}?`;
+  }
+
+  if (constraints.unique) {
+    attributes.push('@unique');
+  }
+
+  if (isCreatedAt) {
+    attributes.push('@default(now())');
+  }
+
+  if (isUpdatedAt) {
+    attributes.push('@updatedAt');
+  }
+
+  if (constraints.default !== undefined && !isCreatedAt && !isUpdatedAt) {
+    const val = constraints.default;
+    if (typeof val === 'string') {
+      attributes.push(`@default("${val}")`);
+    } else {
+      attributes.push(`@default(${val})`);
+    }
+  }
+
+  if (type === 'uuid') {
+    attributes.push('@db.Uuid');
+  }
+
+  const attrStr = attributes.length > 0 ? '  ' + attributes.join('  ') : '';
+  return `  ${name}  ${prismaType}${attrStr}`;
+}
+
+function generateRelationFields(
+  entity: EntityDefinition,
+  relations: RelationDefinition[],
+  allEntities: EntityDefinition[],
+): string[] {
+  const lines: string[] = [];
+
+  for (const rel of relations) {
+    const isFrom = rel.fromEntityId === entity.id;
+    const isTo = rel.toEntityId === entity.id;
+
+    if (!isFrom && !isTo) continue;
+
+    const otherEntityId = isFrom ? rel.toEntityId : rel.fromEntityId;
+    const otherEntity = allEntities.find((e) => e.id === otherEntityId);
+    if (!otherEntity) continue;
+
+    const otherName = otherEntity.name;
+    const fieldName = isFrom ? rel.fromFieldName : rel.toFieldName;
+
+    switch (rel.type) {
+      case 'OneToMany':
+        if (isFrom) {
+          lines.push(`  ${fieldName}  ${otherName}[]`);
+        } else {
+          const fkField = `${entity.name.toLowerCase()}Id`;
+          lines.push(`  ${fkField}  String`);
+          lines.push(
+            `  ${fieldName}  ${otherName}  @relation(fields: [${fkField}], references: [id]${rel.onDelete ? `, onDelete: ${rel.onDelete}` : ''})`,
+          );
+        }
+        break;
+      case 'ManyToOne':
+        if (isFrom) {
+          const fkField = `${otherName.toLowerCase()}Id`;
+          lines.push(`  ${fkField}  String`);
+          lines.push(
+            `  ${fieldName}  ${otherName}  @relation(fields: [${fkField}], references: [id])`,
+          );
+        }
+        break;
+      case 'OneToOne':
+        if (isFrom) {
+          const fkField = `${otherName.toLowerCase()}Id`;
+          lines.push(`  ${fkField}  String  @unique`);
+          lines.push(
+            `  ${fieldName}  ${otherName}  @relation(fields: [${fkField}], references: [id])`,
+          );
+        } else {
+          lines.push(`  ${fieldName}  ${otherName}?`);
+        }
+        break;
+      case 'ManyToMany':
+        lines.push(`  ${fieldName}  ${otherName}[]`);
+        break;
+    }
+  }
+
+  return lines;
+}
+
+export function generateEntityModel(
+  entity: EntityDefinition,
+  relations: RelationDefinition[],
+  allEntities: EntityDefinition[],
+): string {
+  const lines: string[] = [];
+
+  lines.push(`model ${entity.name} {`);
+
+  // ID field (always first)
+  const idField = entity.fields.find((f) => f.isId);
+  if (idField) {
+    lines.push(generateFieldLine(idField));
+  } else {
+    lines.push('  id  String  @id @default(uuid())');
+  }
+
+  // Regular fields
+  for (const field of entity.fields.filter((f) => !f.isId && !f.isCreatedAt && !f.isUpdatedAt)) {
+    lines.push(generateFieldLine(field));
+  }
+
+  // Relation fields
+  const relLines = generateRelationFields(entity, relations, allEntities);
+  if (relLines.length > 0) {
+    lines.push('');
+    lines.push(...relLines);
+  }
+
+  // Timestamps
+  if (entity.timestamps) {
+    const createdAtField = entity.fields.find((f) => f.isCreatedAt);
+    const updatedAtField = entity.fields.find((f) => f.isUpdatedAt);
+    lines.push('');
+    if (createdAtField) {
+      lines.push(generateFieldLine(createdAtField));
+    } else {
+      lines.push('  createdAt  DateTime  @default(now())');
+    }
+    if (updatedAtField) {
+      lines.push(generateFieldLine(updatedAtField));
+    } else {
+      lines.push('  updatedAt  DateTime  @updatedAt');
+    }
+  }
+
+  // Soft delete
+  if (entity.softDelete) {
+    lines.push('  deletedAt  DateTime?');
+  }
+
+  lines.push('');
+  lines.push(`  @@map("${entity.tableName}")`);
+  lines.push('}');
+
+  return lines.join('\n');
+}
+
+export function generatePrismaSchema(metadata: ProjectMetadata): string {
+  const sections: string[] = [];
+
+  // Header
+  sections.push(`// Generated by Visual API Builder
+// DO NOT EDIT MANUALLY
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+`);
+
+  // Entities
+  for (const entity of metadata.entities) {
+    sections.push(generateEntityModel(entity, metadata.relations, metadata.entities));
+  }
+
+  return sections.join('\n\n');
+}
