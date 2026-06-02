@@ -1,15 +1,7 @@
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-  Logger,
-} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
-import {
-  CreateProjectDto,
-  UpdateProjectDto,
-  UpdateProjectMetadataDto,
-} from './dto/project.dto';
+import { CreateProjectDto, UpdateProjectDto, UpdateProjectMetadataDto } from './dto/project.dto';
 import type { ProjectMetadata } from '@vab/types';
 
 const DEFAULT_METADATA: ProjectMetadata = {
@@ -73,7 +65,7 @@ export class ProjectsService {
         description: dto.description,
         isPublic: dto.isPublic ?? false,
         ownerId: userId,
-        metadata: DEFAULT_METADATA as unknown as Record<string, unknown>,
+        metadata: DEFAULT_METADATA as unknown as Prisma.InputJsonValue,
       },
     });
     this.logger.log(`Project created: ${project.id} by user ${userId}`);
@@ -94,7 +86,7 @@ export class ProjectsService {
     const project = await this.prisma.project.update({
       where: { id },
       data: {
-        metadata: dto.metadata,
+        metadata: dto.metadata as Prisma.InputJsonValue,
         version: { increment: 1 },
       },
     });
@@ -112,7 +104,7 @@ export class ProjectsService {
         name: `${source.name} (copy)`,
         description: source.description,
         ownerId: userId,
-        metadata: source.metadata,
+        metadata: source.metadata as Prisma.InputJsonValue,
         isPublic: false,
       },
     });

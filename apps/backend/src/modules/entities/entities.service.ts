@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   Injectable,
   NotFoundException,
@@ -23,9 +24,7 @@ export class EntitiesService {
   async createEntity(projectId: string, dto: CreateEntityDto, userId: string) {
     const meta = await this.getMetadata(projectId, userId);
 
-    const exists = meta.entities.find(
-      (e) => e.name.toLowerCase() === dto.name.toLowerCase(),
-    );
+    const exists = meta.entities.find((e) => e.name.toLowerCase() === dto.name.toLowerCase());
     if (exists) throw new ConflictException(`Entity "${dto.name}" already exists`);
 
     const newEntity: EntityDefinition = {
@@ -61,11 +60,11 @@ export class EntitiesService {
       ...meta.entities[idx],
       ...dto,
       fields: dto.fields
-        ? dto.fields.map((f) => ({
+        ? (dto.fields.map((f) => ({
             ...f,
             id: f.id || randomUUID(),
             constraints: f.constraints ?? {},
-          })) as EntityDefinition['fields']
+          })) as EntityDefinition['fields'])
         : meta.entities[idx].fields,
     };
 
@@ -140,7 +139,7 @@ export class EntitiesService {
     await this.prisma.project.update({
       where: { id: projectId },
       data: {
-        metadata: metadata as unknown as Record<string, unknown>,
+        metadata: metadata as unknown as Prisma.InputJsonValue,
         version: { increment: 1 },
       },
     });

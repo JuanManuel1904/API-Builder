@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   Injectable,
   NotFoundException,
@@ -21,9 +22,7 @@ export class EndpointsService {
   async create(projectId: string, dto: CreateEndpointDto, userId: string) {
     const meta = await this.getMetadata(projectId, userId);
 
-    const exists = meta.endpoints.find(
-      (e) => e.method === dto.method && e.path === dto.path,
-    );
+    const exists = meta.endpoints.find((e) => e.method === dto.method && e.path === dto.path);
     if (exists) throw new ConflictException(`Endpoint ${dto.method} ${dto.path} already exists`);
 
     const newEndpoint: EndpointDefinition = {
@@ -41,7 +40,12 @@ export class EndpointsService {
     return { data: newEndpoint };
   }
 
-  async update(projectId: string, endpointId: string, dto: Partial<CreateEndpointDto>, userId: string) {
+  async update(
+    projectId: string,
+    endpointId: string,
+    dto: Partial<CreateEndpointDto>,
+    userId: string,
+  ) {
     const meta = await this.getMetadata(projectId, userId);
     const idx = meta.endpoints.findIndex((e) => e.id === endpointId);
     if (idx === -1) throw new NotFoundException(`Endpoint ${endpointId} not found`);
@@ -82,7 +86,10 @@ export class EndpointsService {
   private async saveMetadata(projectId: string, metadata: ProjectMetadata) {
     await this.prisma.project.update({
       where: { id: projectId },
-      data: { metadata: metadata as unknown as Record<string, unknown>, version: { increment: 1 } },
+      data: {
+        metadata: metadata as unknown as Prisma.InputJsonValue,
+        version: { increment: 1 },
+      },
     });
   }
 }

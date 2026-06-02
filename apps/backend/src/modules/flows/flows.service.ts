@@ -1,3 +1,5 @@
+import { HttpMethod } from '@vab/types';
+import { Prisma } from '@prisma/client';
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { SaveFlowDto } from './dto/flow.dto';
@@ -17,7 +19,7 @@ export class FlowsService {
 
     if (!flow) {
       // Auto-create a default flow for this endpoint
-      flow = this.createDefaultFlow(endpointId, endpoint.method);
+      flow = this.createDefaultFlow(endpointId, endpoint.method as HttpMethod);
       meta.flows.push(flow);
 
       endpoint.flowId = flow.id;
@@ -38,7 +40,7 @@ export class FlowsService {
     const updatedFlow: FlowDefinition = {
       id: flowId,
       endpointId,
-      nodes: dto.nodes as FlowDefinition['nodes'],
+      nodes: dto.nodes as unknown as FlowDefinition['nodes'],
       edges: dto.edges as FlowDefinition['edges'],
     };
 
@@ -53,7 +55,7 @@ export class FlowsService {
     return { data: updatedFlow };
   }
 
-  private createDefaultFlow(endpointId: string, method: string): FlowDefinition {
+  private createDefaultFlow(endpointId: string, method: HttpMethod): FlowDefinition {
     const requestNodeId = randomUUID();
     const responseNodeId = randomUUID();
 
@@ -69,7 +71,13 @@ export class FlowsService {
         id: responseNodeId,
         type: 'response',
         position: { x: 100, y: 280 },
-        config: { statusCode: method === 'POST' ? 201 : 200, isArray: method === 'GET', wrapInData: true, includeMeta: false, compress: false },
+        config: {
+          statusCode: method === 'POST' ? 201 : 200,
+          isArray: method === 'GET',
+          wrapInData: true,
+          includeMeta: false,
+          compress: false,
+        },
         label: 'Response',
       },
     ];
@@ -91,7 +99,10 @@ export class FlowsService {
   private async saveMetadata(projectId: string, metadata: ProjectMetadata) {
     await this.prisma.project.update({
       where: { id: projectId },
-      data: { metadata: metadata as unknown as Record<string, unknown>, version: { increment: 1 } },
+      data: {
+        metadata: metadata as unknown as Prisma.InputJsonValue,
+        version: { increment: 1 },
+      },
     });
   }
 }

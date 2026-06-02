@@ -17,12 +17,13 @@ export function LoginPage() {
     e.preventDefault();
     try {
       const mutation = tab === 'login' ? login : register;
-      const res = await (mutation as any).mutateAsync(form);
+      const payload = tab === 'login' ? { email: form.email, password: form.password } : form;
+      const res = await (mutation as any).mutateAsync(payload);
       setUser(res.data.user);
       navigate('/dashboard');
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      toast.error(Array.isArray(msg) ? msg[0] : msg ?? 'Something went wrong');
+      toast.error(Array.isArray(msg) ? msg[0] : (msg ?? 'Something went wrong'));
     }
   };
 
@@ -54,9 +55,7 @@ export function LoginPage() {
                 key={t}
                 onClick={() => setTab(t)}
                 className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  tab === t
-                    ? 'bg-bg-4 text-text shadow-sm'
-                    : 'text-text-muted hover:text-text'
+                  tab === t ? 'bg-bg-4 text-text shadow-sm' : 'text-text-muted hover:text-text'
                 }`}
               >
                 {t === 'login' ? 'Sign in' : 'Create account'}
@@ -108,11 +107,7 @@ export function LoginPage() {
               disabled={isPending}
               className="btn btn-primary w-full justify-center py-2 mt-2 disabled:opacity-50"
             >
-              {isPending
-                ? 'Please wait…'
-                : tab === 'login'
-                ? 'Sign in'
-                : 'Create account'}
+              {isPending ? 'Please wait…' : tab === 'login' ? 'Sign in' : 'Create account'}
             </button>
           </form>
 

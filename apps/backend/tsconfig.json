@@ -11,6 +11,9 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "incremental": true,
+
+    "strictPropertyInitialization": false,
+
     "paths": {
       "@vab/types": ["../../packages/types/src"],
       "@vab/metadata-engine": ["../../packages/metadata-engine/src"]
