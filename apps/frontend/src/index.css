@@ -1,4 +1,4 @@
-@tailwind base;
+  @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -29,6 +29,8 @@
   .btn-danger { @apply bg-transparent text-red-400 border-red-500/20 hover:bg-red-500/10; }
   .btn-success { @apply bg-transparent text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10; }
   .input { @apply w-full bg-bg-3 border border-border rounded-md px-2.5 py-1.5 text-xs font-mono text-text outline-none transition-colors focus:border-accent placeholder:text-text-muted; }
+  select.input  { @apply cursor-pointer; }
+  textarea.input { @apply resize-y; }
   .select { @apply w-full bg-bg-3 border border-border rounded-md px-2.5 py-1.5 text-xs font-mono text-text outline-none appearance-none; }
   .label { @apply text-[10px] font-semibold tracking-widest uppercase text-text-muted mb-1 block; }
   .badge { @apply inline-flex items-center text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded; }

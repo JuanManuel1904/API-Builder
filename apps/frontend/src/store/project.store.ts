@@ -1,6 +1,12 @@
+// apps/frontend/src/store/project.store.ts
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import type { ProjectMetadata, EntityDefinition, EndpointDefinition, FlowDefinition } from '@vab/types';
+import type {
+  ProjectMetadata,
+  EntityDefinition,
+  EndpointDefinition,
+  FlowDefinition,
+} from '@vab/types';
 
 interface ProjectStore {
   projectId: string | null;
@@ -24,6 +30,7 @@ interface ProjectStore {
 
   // Flow actions
   upsertFlow: (flow: FlowDefinition) => void;
+  updateNodeConfig: (flowId: string, nodeId: string, config: Record<string, any>) => void; // ← NUEVO
 }
 
 const defaultMetadata: ProjectMetadata = {
@@ -103,6 +110,17 @@ export const useProjectStore = create<ProjectStore>()(
         const idx = s.metadata.flows.findIndex((f) => f.id === flow.id);
         if (idx !== -1) s.metadata.flows[idx] = flow;
         else s.metadata.flows.push(flow);
+        s.isDirty = true;
+      }),
+
+    // ← NUEVO: actualiza solo el config de un nodo dentro de un flow
+    updateNodeConfig: (flowId, nodeId, config) =>
+      set((s) => {
+        const flow = s.metadata.flows.find((f) => f.id === flowId);
+        if (!flow) return;
+        const node = flow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        node.config = { ...node.config, ...config } as any;
         s.isDirty = true;
       }),
   })),

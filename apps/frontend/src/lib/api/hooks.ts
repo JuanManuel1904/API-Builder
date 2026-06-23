@@ -10,6 +10,7 @@ import type {
   CreateEndpointDto,
   FlowDefinition,
   SaveFlowDto,
+  RelationDefinition,
 } from '@vab/types';
 
 // ── Auth ──────────────────────────────────────────────────────
@@ -123,8 +124,34 @@ export function useUpdateEntity(projectId: string) {
 export function useDeleteEntity(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (entityId: string) =>
-      api.delete(`/projects/${projectId}/entities/${entityId}`),
+    mutationFn: (entityId: string) => api.delete(`/projects/${projectId}/entities/${entityId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects', projectId] }),
+  });
+}
+
+// ── Relations ─────────────────────────────────────────────────
+export function useRelations(projectId: string) {
+  return useQuery<RelationDefinition[]>({
+    queryKey: ['projects', projectId, 'relations'],
+    queryFn: () => api.get(`/projects/${projectId}/relations`).then((r) => r.data.data),
+    enabled: !!projectId,
+  });
+}
+
+export function useCreateRelation(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Omit<RelationDefinition, 'id'>) =>
+      api.post(`/projects/${projectId}/relations`, data).then((r) => r.data.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects', projectId] }),
+  });
+}
+
+export function useDeleteRelation(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (relationId: string) =>
+      api.delete(`/projects/${projectId}/relations/${relationId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects', projectId] }),
   });
 }
@@ -143,6 +170,15 @@ export function useCreateEndpoint(projectId: string) {
   return useMutation({
     mutationFn: (data: CreateEndpointDto) =>
       api.post(`/projects/${projectId}/endpoints`, data).then((r) => r.data.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects', projectId] }),
+  });
+}
+
+export function useUpdateEndpoint(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ endpointId, data }: { endpointId: string; data: Partial<CreateEndpointDto> }) =>
+      api.patch(`/projects/${projectId}/endpoints/${endpointId}`, data).then((r) => r.data.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects', projectId] }),
   });
 }
@@ -170,20 +206,54 @@ export function useSaveFlow(projectId: string, endpointId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: SaveFlowDto) =>
-      api
-        .put(`/projects/${projectId}/endpoints/${endpointId}/flow`, data)
-        .then((r) => r.data.data),
+      api.put(`/projects/${projectId}/endpoints/${endpointId}/flow`, data).then((r) => r.data.data),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ['projects', projectId, 'flows', endpointId] }),
   });
 }
 
 // ── Export ────────────────────────────────────────────────────
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function useExportPrisma(projectId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.get(`/projects/${projectId}/export/prisma`, { responseType: 'blob' });
+      triggerDownload(res.data, 'schema.prisma');
+    },
+  });
+}
+
 export function useExportOpenApi(projectId: string) {
-  return useQuery({
-    queryKey: ['projects', projectId, 'export', 'openapi'],
-    queryFn: () =>
-      api.get(`/projects/${projectId}/export/openapi`).then((r) => r.data.data),
-    enabled: false,
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.get(`/projects/${projectId}/export/openapi`, { responseType: 'blob' });
+      triggerDownload(res.data, 'openapi.json');
+    },
+  });
+}
+
+export function useExportPostman(projectId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.get(`/projects/${projectId}/export/postman`, { responseType: 'blob' });
+      triggerDownload(res.data, 'postman_collection.json');
+    },
+  });
+}
+
+export function useExportZip(projectId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.get(`/projects/${projectId}/export/zip`, { responseType: 'blob' });
+      triggerDownload(res.data, 'project.zip');
+    },
   });
 }

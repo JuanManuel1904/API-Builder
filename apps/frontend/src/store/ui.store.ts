@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 type PanelTab = 'properties' | 'validation' | 'schema';
-type ActiveModal = 'new-project' | 'new-entity' | 'new-endpoint' | 'export' | null;
+type ActiveModal = 'new-project' | 'new-entity' | 'new-endpoint' | 'new-relation' | 'export' | null;
 
 interface UiStore {
   selectedNodeId: string | null;

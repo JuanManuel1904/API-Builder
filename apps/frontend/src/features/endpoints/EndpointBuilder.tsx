@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { useCreateEndpoint } from '@/lib/api/hooks';
+import { useCreateEndpoint, useUpdateEndpoint } from '@/lib/api/hooks';
 import { useProjectStore } from '@/store/project.store';
 import { cn, METHOD_COLORS } from '@/lib/utils';
-import type { HttpMethod } from '@vab/types';
+import type { EndpointDefinition, HttpMethod } from '@vab/types';
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
@@ -17,69 +17,61 @@ const METHOD_DESCRIPTIONS: Record<HttpMethod, string> = {
   DELETE: 'Remove resource',
 };
 
-// Quick templates
-const TEMPLATES = [
-  { label: 'CRUD', description: 'Full set of 5 endpoints for an entity', methods: ['GET', 'POST', 'GET', 'PUT', 'DELETE'] as HttpMethod[] },
-  { label: 'Read-only', description: 'List + detail endpoints', methods: ['GET', 'GET'] as HttpMethod[] },
-  { label: 'Webhook', description: 'Single POST receiver', methods: ['POST'] as HttpMethod[] },
-];
-
 interface Props {
   projectId: string;
   onClose: () => void;
+  editEndpoint?: EndpointDefinition;
 }
 
-export function EndpointBuilder({ projectId, onClose }: Props) {
+export function EndpointBuilder({ projectId, onClose, editEndpoint }: Props) {
   const createEndpoint = useCreateEndpoint(projectId);
+  const updateEndpoint = useUpdateEndpoint(projectId);
   const { metadata } = useProjectStore();
+  const isEditing = !!editEndpoint;
 
-  const [method, setMethod] = useState<HttpMethod>('GET');
-  const [path, setPath] = useState('/');
-  const [summary, setSummary] = useState('');
-  const [isPublic, setIsPublic] = useState(false);
-  const [selectedEntity, setSelectedEntity] = useState('');
+  const [method, setMethod] = useState<HttpMethod>(editEndpoint?.method ?? 'GET');
+  const [path, setPath] = useState(editEndpoint?.path ?? '/');
+  const [summary, setSummary] = useState(editEndpoint?.summary ?? '');
+  const [isPublic, setIsPublic] = useState(editEndpoint?.isPublic ?? false);
+  const [selectedEntity, setSelectedEntity] = useState(editEndpoint?.tags?.[0] ?? '');
+
+  const isPending = createEndpoint.isPending || updateEndpoint.isPending;
 
   const handleSubmit = async () => {
     if (!path.startsWith('/')) return toast.error('Path must start with /');
 
     const tags = selectedEntity ? [selectedEntity.toLowerCase()] : [];
+    const payload = { method, path, summary: summary || undefined, isPublic, tags };
 
     try {
-      await createEndpoint.mutateAsync({ method, path, summary: summary || undefined, isPublic, tags });
-      toast.success(`${method} ${path} created`);
+      if (isEditing) {
+        await updateEndpoint.mutateAsync({ endpointId: editEndpoint.id, data: payload });
+        toast.success(`${method} ${path} updated`);
+      } else {
+        await createEndpoint.mutateAsync(payload);
+        toast.success(`${method} ${path} created`);
+      }
       onClose();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Failed to create endpoint');
+      toast.error(
+        err?.response?.data?.message ?? `Failed to ${isEditing ? 'update' : 'create'} endpoint`,
+      );
     }
-  };
-
-  const applyTemplate = (methods: HttpMethod[], entity: string) => {
-    if (!entity) return toast.error('Select an entity first');
-    const entityLower = entity.toLowerCase();
-    const pathMap: Record<HttpMethod, string> = {
-      GET: `/${entityLower}s`,
-      POST: `/${entityLower}s`,
-      PUT: `/${entityLower}s/:id`,
-      PATCH: `/${entityLower}s/:id`,
-      DELETE: `/${entityLower}s/:id`,
-    };
-    // Just set first one
-    setMethod(methods[0]);
-    setPath(pathMap[methods[0]]);
-    setSummary('');
   };
 
   return (
     <Modal
-      title="New Endpoint"
-      description="Define a new REST endpoint"
+      title={isEditing ? `Edit ${editEndpoint.method} ${editEndpoint.path}` : 'New Endpoint'}
+      description="Define a REST endpoint"
       onClose={onClose}
       size="md"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={createEndpoint.isPending} onClick={handleSubmit}>
-            Create Endpoint
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={isPending} onClick={handleSubmit}>
+            {isEditing ? 'Update Endpoint' : 'Create Endpoint'}
           </Button>
         </>
       }
@@ -96,11 +88,15 @@ export function EndpointBuilder({ projectId, onClose }: Props) {
                 className={cn(
                   'badge cursor-pointer transition-all text-[10px] px-2 py-1',
                   METHOD_COLORS[m],
-                  method === m ? 'ring-1 ring-current shadow-[0_0_6px_currentColor]' : 'opacity-60 hover:opacity-100',
+                  method === m
+                    ? 'ring-1 ring-current shadow-[0_0_6px_currentColor]'
+                    : 'opacity-60 hover:opacity-100',
                 )}
               >
                 {m}
-                <span className="ml-1 font-normal text-[9px] opacity-70">{METHOD_DESCRIPTIONS[m]}</span>
+                <span className="ml-1 font-normal text-[9px] opacity-70">
+                  {METHOD_DESCRIPTIONS[m]}
+                </span>
               </button>
             ))}
           </div>
@@ -117,7 +113,9 @@ export function EndpointBuilder({ projectId, onClose }: Props) {
               className="input rounded-l-none flex-1"
               placeholder="/users or /users/:id"
               value={path}
-              onChange={(e) => setPath(e.target.value.startsWith('/') ? e.target.value : `/${e.target.value}`)}
+              onChange={(e) =>
+                setPath(e.target.value.startsWith('/') ? e.target.value : `/${e.target.value}`)
+              }
               autoFocus
             />
           </div>
@@ -145,7 +143,9 @@ export function EndpointBuilder({ projectId, onClose }: Props) {
             >
               <option value="">None</option>
               {metadata.entities.map((e) => (
-                <option key={e.id} value={e.name}>{e.name}</option>
+                <option key={e.id} value={e.name}>
+                  {e.name}
+                </option>
               ))}
             </select>
           </div>

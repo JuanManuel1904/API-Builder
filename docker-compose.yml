@@ -50,7 +50,7 @@ services:
       JWT_REFRESH_EXPIRES_IN: 7d
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      CORS_ORIGIN: http://localhost:80
+      CORS_ORIGIN: http://localhost
     ports:
       - '3001:3001'
     depends_on:
@@ -59,7 +59,7 @@ services:
       redis:
         condition: service_healthy
     command: >
-      sh -c "npx prisma migrate deploy && node dist/main"
+      sh -c "/app/node_modules/.bin/prisma migrate deploy --schema=/app/apps/backend/prisma/schema.prisma && node /app/apps/backend/dist/apps/backend/src/main"
 
   # ── Frontend (Nginx + Vite build) ────────────────────────────
   frontend:

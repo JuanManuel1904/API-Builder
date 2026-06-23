@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef, useState } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useProject, useSaveFlow, useFlow } from '@/lib/api/hooks';
@@ -9,28 +9,29 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Canvas } from '@/features/canvas/Canvas';
 import { InspectorPanel } from '@/features/canvas/InspectorPanel';
 import { EntityBuilder } from '@/features/entities/EntityBuilder';
+import { RelationBuilder } from '@/features/entities/RelationBuilder';
 import { EndpointBuilder } from '@/features/endpoints/EndpointBuilder';
+import { ExportModal } from '@/features/projects/ExportModal';
 import { Playground } from '@/features/playground/Playground';
 import { useAutoSave } from '@/lib/hooks/useAutoSave';
-import type { ProjectMetadata } from '@vab/types';
+import type { EntityDefinition, EndpointDefinition, ProjectMetadata } from '@vab/types';
 import type { Node, Edge } from '@xyflow/react';
 
 export function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [showPlayground, setShowPlayground] = useState(false);
+  const [editingEntity, setEditingEntity] = useState<EntityDefinition | null>(null);
+  const [editingEndpoint, setEditingEndpoint] = useState<EndpointDefinition | null>(null);
 
   const { setProject, metadata, isDirty, markSaved, upsertFlow } = useProjectStore();
-  const { activeModal, closeModal, selectedEndpointId } = useUiStore();
+  const { activeModal, closeModal, selectedEndpointId, openModal } = useUiStore();
 
   // Load project
   const { data: project, isLoading, isError } = useProject(projectId ?? '');
 
   // Load flow for selected endpoint
-  const { data: flow } = useFlow(
-    projectId ?? '',
-    selectedEndpointId ?? '',
-  );
+  const { data: flow } = useFlow(projectId ?? '', selectedEndpointId ?? '');
 
   // Auto-save mutation
   const autoSaveMutation = useAutoSave(projectId ?? '', metadata, markSaved, isDirty);
@@ -75,6 +76,26 @@ export function EditorPage() {
     [selectedEndpointId, flow, upsertFlow],
   );
 
+  const handleEditEntity = (entity: EntityDefinition) => {
+    setEditingEntity(entity);
+    openModal('new-entity');
+  };
+
+  const handleEditEndpoint = (endpoint: EndpointDefinition) => {
+    setEditingEndpoint(endpoint);
+    openModal('new-endpoint');
+  };
+
+  const handleCloseEntityModal = () => {
+    setEditingEntity(null);
+    closeModal();
+  };
+
+  const handleCloseEndpointModal = () => {
+    setEditingEndpoint(null);
+    closeModal();
+  };
+
   if (isLoading) return <LoadingScreen />;
 
   return (
@@ -82,7 +103,11 @@ export function EditorPage() {
       <Topbar projectId={projectId} />
 
       <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
+        <Sidebar
+          projectId={projectId ?? ''}
+          onEditEntity={handleEditEntity}
+          onEditEndpoint={handleEditEndpoint}
+        />
 
         {/* Canvas area */}
         <div className="flex-1 relative overflow-hidden">
@@ -113,11 +138,23 @@ export function EditorPage() {
 
       {/* Modals */}
       {activeModal === 'new-entity' && (
-        <EntityBuilder projectId={projectId ?? ''} onClose={closeModal} />
+        <EntityBuilder
+          projectId={projectId ?? ''}
+          onClose={handleCloseEntityModal}
+          editEntity={editingEntity ?? undefined}
+        />
       )}
       {activeModal === 'new-endpoint' && (
-        <EndpointBuilder projectId={projectId ?? ''} onClose={closeModal} />
+        <EndpointBuilder
+          projectId={projectId ?? ''}
+          onClose={handleCloseEndpointModal}
+          editEndpoint={editingEndpoint ?? undefined}
+        />
       )}
+      {activeModal === 'new-relation' && (
+        <RelationBuilder projectId={projectId ?? ''} onClose={closeModal} />
+      )}
+      {activeModal === 'export' && <ExportModal projectId={projectId ?? ''} onClose={closeModal} />}
     </div>
   );
 }

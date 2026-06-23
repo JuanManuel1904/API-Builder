@@ -2,11 +2,20 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { useCreateEntity } from '@/lib/api/hooks';
+import { useCreateEntity, useUpdateEntity } from '@/lib/api/hooks';
 import { cn } from '@/lib/utils';
-import type { EntityField, FieldType } from '@vab/types';
+import type { EntityDefinition, EntityField, FieldType } from '@vab/types';
 
-const FIELD_TYPES: FieldType[] = ['string', 'number', 'boolean', 'date', 'uuid', 'enum', 'json', 'array'];
+const FIELD_TYPES: FieldType[] = [
+  'string',
+  'number',
+  'boolean',
+  'date',
+  'uuid',
+  'enum',
+  'json',
+  'array',
+];
 
 const TYPE_COLORS: Record<FieldType, string> = {
   string: 'text-blue-400',
@@ -26,14 +35,17 @@ function generateId() {
 interface Props {
   projectId: string;
   onClose: () => void;
-  editEntity?: any;
+  editEntity?: EntityDefinition;
 }
 
 export function EntityBuilder({ projectId, onClose, editEntity }: Props) {
   const createEntity = useCreateEntity(projectId);
+  const updateEntity = useUpdateEntity(projectId);
+  const isEditing = !!editEntity;
 
   const [name, setName] = useState(editEntity?.name ?? '');
   const [description, setDescription] = useState(editEntity?.description ?? '');
+  const [softDelete, setSoftDelete] = useState(editEntity?.softDelete ?? false);
   const [fields, setFields] = useState<EntityField[]>(
     editEntity?.fields ?? [
       { id: generateId(), name: 'id', type: 'uuid', isId: true, constraints: {} },
@@ -57,25 +69,35 @@ export function EntityBuilder({ projectId, onClose, editEntity }: Props) {
     setFields((fs) => fs.filter((f) => f.id !== id));
   };
 
+  const isPending = createEntity.isPending || updateEntity.isPending;
+
   const handleSubmit = async () => {
     if (!name.trim()) return toast.error('Entity name is required');
     if (fields.some((f) => !f.name.trim())) return toast.error('All fields need a name');
 
     const tableName = name.toLowerCase().replace(/\s+/g, '_') + 's';
+    const payload = {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      tableName,
+      fields,
+      timestamps: true,
+      softDelete,
+    };
 
     try {
-      await createEntity.mutateAsync({
-        name: name.trim(),
-        description: description.trim() || undefined,
-        tableName,
-        fields,
-        timestamps: true,
-        softDelete: false,
-      });
-      toast.success(`Entity "${name}" created`);
+      if (isEditing) {
+        await updateEntity.mutateAsync({ entityId: editEntity.id, data: payload });
+        toast.success(`Entity "${name}" updated`);
+      } else {
+        await createEntity.mutateAsync(payload);
+        toast.success(`Entity "${name}" created`);
+      }
       onClose();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Failed to create entity');
+      toast.error(
+        err?.response?.data?.message ?? `Failed to ${isEditing ? 'update' : 'create'} entity`,
+      );
     }
   };
 
@@ -84,15 +106,17 @@ export function EntityBuilder({ projectId, onClose, editEntity }: Props) {
 
   return (
     <Modal
-      title={editEntity ? `Edit ${editEntity.name}` : 'New Entity'}
+      title={isEditing ? `Edit ${editEntity.name}` : 'New Entity'}
       description="Define the data model for your entity"
       onClose={onClose}
       size="lg"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={createEntity.isPending} onClick={handleSubmit}>
-            {editEntity ? 'Update' : 'Create Entity'}
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={isPending} onClick={handleSubmit}>
+            {isEditing ? 'Update Entity' : 'Create Entity'}
           </Button>
         </>
       }
@@ -125,7 +149,9 @@ export function EntityBuilder({ projectId, onClose, editEntity }: Props) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="label mb-0">Fields</label>
-            <Button variant="ghost" size="sm" onClick={addField}>+ Add field</Button>
+            <Button variant="ghost" size="sm" onClick={addField}>
+              + Add field
+            </Button>
           </div>
 
           {/* System fields (readonly) */}
@@ -152,6 +178,20 @@ export function EntityBuilder({ projectId, onClose, editEntity }: Props) {
               ))
             )}
           </div>
+        </div>
+
+        {/* Options */}
+        <div className="pt-1 border-t border-border">
+          <label className="flex items-center gap-2 cursor-pointer text-xs text-text-muted hover:text-text w-fit">
+            <input
+              type="checkbox"
+              className="accent-accent"
+              checked={softDelete}
+              onChange={(e) => setSoftDelete(e.target.checked)}
+            />
+            Enable soft delete (adds <code className="text-accent-2 text-[10px]">deletedAt</code>{' '}
+            field instead of hard delete)
+          </label>
         </div>
       </div>
     </Modal>
@@ -195,7 +235,9 @@ function FieldRow({
         onChange={(e) => onChange({ type: e.target.value as FieldType })}
       >
         {FIELD_TYPES.map((t) => (
-          <option key={t} value={t}>{t}</option>
+          <option key={t} value={t}>
+            {t}
+          </option>
         ))}
       </select>
 
@@ -206,7 +248,9 @@ function FieldRow({
             type="checkbox"
             className="accent-accent"
             checked={!!field.constraints.required}
-            onChange={(e) => onChange({ constraints: { ...field.constraints, required: e.target.checked } })}
+            onChange={(e) =>
+              onChange({ constraints: { ...field.constraints, required: e.target.checked } })
+            }
           />
           req
         </label>
@@ -215,7 +259,9 @@ function FieldRow({
             type="checkbox"
             className="accent-accent"
             checked={!!field.constraints.unique}
-            onChange={(e) => onChange({ constraints: { ...field.constraints, unique: e.target.checked } })}
+            onChange={(e) =>
+              onChange({ constraints: { ...field.constraints, unique: e.target.checked } })
+            }
           />
           uniq
         </label>
@@ -224,7 +270,9 @@ function FieldRow({
             type="checkbox"
             className="accent-accent"
             checked={!!field.constraints.nullable}
-            onChange={(e) => onChange({ constraints: { ...field.constraints, nullable: e.target.checked } })}
+            onChange={(e) =>
+              onChange({ constraints: { ...field.constraints, nullable: e.target.checked } })
+            }
           />
           null
         </label>
